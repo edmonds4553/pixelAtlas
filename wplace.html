@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>China Pixel Map</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --panel-bg: rgba(15, 24, 37, 0.84);
+      --panel-strong: rgba(11, 18, 28, 0.94);
+      --panel-border: rgba(255, 255, 255, 0.14);
+      --text-main: #f5f8ff;
+      --text-muted: rgba(245, 248, 255, 0.7);
+      --accent: #71de67;
+      --accent-strong: #4ccf61;
+      --shadow: 0 18px 46px rgba(4, 10, 18, 0.28);
+      --danger: #ff7f7f;
+      --warning: #ffd46b;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text-main);
+      background: #0f1825;
+    }
+
+    body {
+      position: relative;
+      user-select: none;
+    }
+
+    #map {
+      position: fixed;
+      inset: 0;
+      background: #dbe9f6;
+    }
+
+    #paintCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    body.pixel-painting #paintCanvas {
+      pointer-events: auto;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .hud {
+      position: fixed;
+      z-index: 4;
+      backdrop-filter: blur(14px);
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--shadow);
+    }
+
+    .pill,
+    .button {
+      border: 0;
+      cursor: pointer;
+      color: var(--text-main);
+      background: rgba(255, 255, 255, .09);
+      transition: transform .14s ease, background .14s ease;
+    }
+
+    .pill:hover,
+    .button:hover {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, .16);
+    }
+
+    .pill {
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .paint-button {
+      min-width: 96px;
+      color: #0f1c10;
+      background: linear-gradient(135deg, #abf37a, #53d868);
+      box-shadow: 0 10px 24px rgba(87, 220, 101, .28);
+    }
+
+    .paint-button.active {
+      color: #fff;
+      background: linear-gradient(135deg, #ff7f6f, #ffad55);
+      box-shadow: 0 10px 24px rgba(255, 131, 95, .28);
+    }
+
+    .panel {
+      width: 228px;
+      border-radius: 22px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .left-panel {
+      left: 18px;
+      top: 18px;
+    }
+
+    .right-panel {
+      right: 18px;
+      top: 18px;
+      width: 256px;
+    }
+
+    .panel-title {
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, .62);
+    }
+
+    .selected-color {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.07);
+    }
+
+    .selected-swatch {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,.2);
+      flex: none;
+    }
+
+    .checker {
+      background-color: rgba(11, 17, 26, 0.92);
+      background-image:
+        linear-gradient(45deg, rgba(255,255,255,0.16) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255,255,255,0.16) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.16) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.16) 75%);
+      background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+      background-size: 12px 12px;
+    }
+
+    .selected-name {
+      font-size: 14px;
+      font-weight: 800;
+      margin-bottom: 3px;
+    }
+
+    .small-text {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 13px;
+      border: 2px solid transparent;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
+      cursor: pointer;
+      transition: transform .14s ease, border-color .14s ease;
+    }
+
+    .swatch:hover,
+    .swatch.active {
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,.9);
+    }
+
+    .stat-card {
+      padding: 12px;
+      border-radius: 17px;
+      background: rgba(255,255,255,.07);
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .control-grid .pill {
+      min-width: 0;
+      width: 100%;
+      padding: 10px 8px;
+      text-align: center;
+    }
+
+    .stat-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+    }
+
+    .stat-value {
+      max-width: 150px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      text-align: right;
+      font-weight: 800;
+    }
+
+    .energy-bar {
+      height: 12px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+    }
+
+    .energy-fill {
+      height: 100%;
+      width: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #b9f072, #5fdb68 70%, #4fc588);
+      box-shadow: 0 0 20px rgba(95, 219, 104, .34);
+    }
+
+    .toolbar {
+      right: 18px;
+      bottom: 96px;
+      border-radius: 20px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .danger-button {
+      color: #ffdede;
+      background: rgba(255, 125, 125, .16);
+    }
+
+    .status-text {
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .status-tip {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mask {
+      position: fixed;
+      inset: 0;
+      z-index: 6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(7, 13, 21, .56);
+      backdrop-filter: blur(12px);
+      padding: 20px;
+    }
+
+    .mask.hidden {
+      display: none;
+    }
+
+    .mask-card {
+      width: min(460px, 100%);
+      padding: 24px;
+      border-radius: 24px;
+      background: var(--panel-strong);
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--shadow);
+    }
+
+    .mask-title {
+      font-size: 20px;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .field label {
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .field input {
+      height: 44px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: var(--text-main);
+      padding: 0 14px;
+      outline: none;
+      font-size: 14px;
+    }
+
+    .field input::placeholder {
+      color: rgba(255,255,255,.36);
+    }
+
+    .mask-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .primary-button,
+    .secondary-button {
+      height: 42px;
+      border-radius: 14px;
+      border: 0;
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .primary-button {
+      color: #11220f;
+      background: linear-gradient(135deg, #abf37a, #53d868);
+    }
+
+    .secondary-button {
+      color: var(--text-main);
+      background: rgba(255,255,255,.08);
+    }
+
+    .error-text {
+      color: #ffb3b3;
+      min-height: 18px;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+
+    @media (max-width: 760px) {
+      .left-panel {
+        left: 10px;
+        right: 10px;
+        top: auto;
+        bottom: 126px;
+        width: auto;
+      }
+
+      .palette-grid {
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .right-panel {
+        top: 76px;
+        right: 10px;
+        width: min(240px, calc(100vw - 20px));
+      }
+
+      .toolbar {
+        right: 10px;
+        bottom: 240px;
+      }
+
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <canvas id="paintCanvas"></canvas>
+
+  <div class="hud panel left-panel">
+    <div class="panel-title">Palette</div>
+    <div class="selected-color">
+      <div class="selected-swatch" id="selectedSwatch"></div>
+      <div>
+        <div class="selected-name" id="selectedName">珊瑚红</div>
+        <div class="small-text" id="selectedTip">点击右侧 Paint 后开始涂画</div>
+      </div>
+    </div>
+    <div class="palette-grid" id="paletteGrid"></div>
+    <div class="small-text">地图缩放、拖拽完全交给高德地图。点击右侧 Paint 后即可落像素；缩小时会放大显示一点，方便看见作品。</div>
+  </div>
+
+  <div class="hud panel right-panel">
+    <div class="panel-title">Status</div>
+    <div class="stat-card">
+      <div class="control-grid">
+        <button class="pill" id="recenterButton" type="button">全国</button>
+        <button class="pill paint-button" id="paintButton" type="button">Paint</button>
+      </div>
+      <div class="small-text">点击 Paint 后才能涂画；开启后支持单击和连续拖画。放大后会进入更精细的像素层。</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-row">
+        <span class="stat-label">地图中心</span>
+        <span class="stat-value" id="centerText">-</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">绘制范围</span>
+        <span class="stat-value" id="rangeText">-</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">地图缩放</span>
+        <span class="stat-value" id="zoomText">-</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">像素坐标</span>
+        <span class="stat-value" id="coordText">-</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">作品像素</span>
+        <span class="stat-value" id="pixelCountText">0</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-row">
+        <span class="stat-label">Charges</span>
+        <span class="stat-value" id="energyText">30 / 30</span>
+      </div>
+      <div class="energy-bar">
+        <div class="energy-fill" id="energyFill"></div>
+      </div>
+      <div class="small-text" id="cooldownText">能量已满，可以继续放置像素</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-row">
+        <span class="stat-label">地图状态</span>
+        <span class="stat-value" id="mapStatusText">未连接</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">自动保存</span>
+        <span class="stat-value" id="saveText">未写入</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud toolbar">
+    <button class="button" id="exportButton" type="button">导出作品</button>
+    <button class="button" id="importButton" type="button">导入作品</button>
+    <button class="button danger-button" id="resetButton" type="button">清空作品</button>
+  </div>
+
+  <div class="mask" id="keyMask">
+    <div class="mask-card">
+      <div class="mask-title">接入高德地图</div>
+      <div class="small-text">页面使用高德地图 JS API 作为底图。请输入你自己的高德 Web `Key` 后再加载地图；如果你启用了安全密钥，也可以一并填写。页面不会内置任何默认 Key，适合直接开源。</div>
+      <div class="field">
+        <label for="amapKeyInput">高德 Web Key</label>
+        <input id="amapKeyInput" type="text" placeholder="请输入你的高德 Web Key" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="amapSecurityInput">SecurityJsCode（可选）</label>
+        <input id="amapSecurityInput" type="text" placeholder="如果控制台要求安全密钥，再填写这里" autocomplete="off">
+      </div>
+      <div class="mask-actions">
+        <button class="primary-button" id="loadMapButton" type="button">加载地图</button>
+        <button class="secondary-button" id="closeMaskButton" type="button">稍后再说</button>
+      </div>
+      <div class="error-text" id="keyErrorText"></div>
+    </div>
+  </div>
+
+  <input id="importInput" type="file" accept=".json,application/json" hidden>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'china_place_amap_pixels_v1';
+      const MAP_SCRIPT_TIMEOUT_MS = 12000;
+      const DETAIL_ZOOM = 9.6;
+      const MIN_PIXEL_SIZE = 6;
+      const MIN_HOVER_SIZE = 12;
+      const MAX_ENERGY = 30;
+      const ENERGY_RECOVER_MS = 2500;
+      const GRID_DIVISIONS = 32768;
+      const GRID_STEP = (Math.PI * 2) / GRID_DIVISIONS;
+
+      const palette = [
+        { name: '留白', value: '__erase__', tip: '恢复为地图底色', checker: true },
+        { name: '暖白', value: '#f7f1df', tip: '适合文字、高光和边框' },
+        { name: '珊瑚红', value: '#e9574f', tip: '适合旗帜、图标和强调' },
+        { name: '橙金', value: '#f09a35', tip: '适合建筑、徽章和高光' },
+        { name: '亮黄', value: '#f4d84f', tip: '适合星光和醒目标记' },
+        { name: '青柠', value: '#9ad34c', tip: '适合活力装饰和草地' },
+        { name: '草绿', value: '#4cb767', tip: '适合地图补色和自然元素' },
+        { name: '湖青', value: '#28b6a9', tip: '适合水系和科技感图形' },
+        { name: '天蓝', value: '#4f96ef', tip: '适合天空、水面和冷色主体' },
+        { name: '深蓝', value: '#2e58b8', tip: '适合阴影、描边和夜景' },
+        { name: '紫罗兰', value: '#8d63da', tip: '适合特殊标记和渐变' },
+        { name: '玫红', value: '#d75aa8', tip: '适合花朵和装饰' },
+        { name: '棕土', value: '#8d6548', tip: '适合地表和木质元素' },
+        { name: '石墨', value: '#455164', tip: '适合暗部和文字' },
+        { name: '墨黑', value: '#111824', tip: '适合强反差细线' },
+        { name: '纯白', value: '#ffffff', tip: '适合最亮像素' }
+      ];
+
+      const elements = {
+        map: document.getElementById('map'),
+        paintCanvas: document.getElementById('paintCanvas'),
+        layerText: document.getElementById('layerText'),
+        centerText: document.getElementById('centerText'),
+        rangeText: document.getElementById('rangeText'),
+        zoomText: document.getElementById('zoomText'),
+        coordText: document.getElementById('coordText'),
+        pixelCountText: document.getElementById('pixelCountText'),
+        energyText: document.getElementById('energyText'),
+        energyFill: document.getElementById('energyFill'),
+        cooldownText: document.getElementById('cooldownText'),
+        mapStatusText: document.getElementById('mapStatusText'),
+        saveText: document.getElementById('saveText'),
+        statusText: document.getElementById('statusText'),
+        statusTip: document.getElementById('statusTip'),
+        statusChip: document.getElementById('statusChip'),
+        selectedSwatch: document.getElementById('selectedSwatch'),
+        selectedName: document.getElementById('selectedName'),
+        selectedTip: document.getElementById('selectedTip'),
+        paletteGrid: document.getElementById('paletteGrid'),
+        recenterButton: document.getElementById('recenterButton'),
+        paintButton: document.getElementById('paintButton'),
+        exportButton: document.getElementById('exportButton'),
+        importButton: document.getElementById('importButton'),
+        resetButton: document.getElementById('resetButton'),
+        importInput: document.getElementById('importInput'),
+        keyMask: document.getElementById('keyMask'),
+        amapKeyInput: document.getElementById('amapKeyInput'),
+        amapSecurityInput: document.getElementById('amapSecurityInput'),
+        loadMapButton: document.getElementById('loadMapButton'),
+        closeMaskButton: document.getElementById('closeMaskButton'),
+        keyErrorText: document.getElementById('keyErrorText')
+      };
+
+      const context = elements.paintCanvas.getContext('2d');
+
+      const state = {
+        amapKey: '',
+        amapSecurityJsCode: '',
+        map: null,
+        hoverCell: null,
+        pixels: {},
+        pixelCount: 0,
+        selectedColor: palette[2].value,
+        paintMode: false,
+        energy: MAX_ENERGY,
+        lastEnergyTick: Date.now(),
+        saveLabel: '未写入',
+        mapStatus: '未连接',
+        message: '请输入高德 Key 后开始加载地图',
+        tip: '输入你自己的高德 Key 后加载地图；加载完成后点击右侧 Paint 即可开始涂画',
+        scriptLoaded: false,
+        scriptLoadingPromise: null,
+        redrawRafId: 0,
+        pointerDrawing: false,
+        lastPaintedKey: ''
+      };
+
+      function setStatus(message, tip, chip) {
+        state.message = message;
+        state.tip = tip || state.tip;
+        if (chip && elements.statusChip) {
+          elements.statusChip.textContent = chip;
+        }
+      }
+
+      function updateCanvasSize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        elements.paintCanvas.width = Math.round(window.innerWidth * dpr);
+        elements.paintCanvas.height = Math.round(window.innerHeight * dpr);
+        elements.paintCanvas.style.width = window.innerWidth + 'px';
+        elements.paintCanvas.style.height = window.innerHeight + 'px';
+        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function scheduleRedraw() {
+        if (state.redrawRafId) {
+          return;
+        }
+        state.redrawRafId = window.requestAnimationFrame(() => {
+          state.redrawRafId = 0;
+          redrawPaintLayer();
+        });
+      }
+
+      function initPalette() {
+        elements.paletteGrid.innerHTML = '';
+        palette.forEach((item) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'swatch';
+          button.title = item.name;
+          if (item.checker) {
+            button.classList.add('checker');
+          } else {
+            button.style.background = item.value;
+          }
+          button.addEventListener('click', () => {
+            state.selectedColor = item.value;
+            updatePalette();
+            persistState();
+            setStatus('已切换颜色：' + item.name, item.tip);
+            updateHud();
+            redrawPaintLayer();
+          });
+          item.element = button;
+          elements.paletteGrid.appendChild(button);
+        });
+        updatePalette();
+      }
+
+      function updatePalette() {
+        const current = palette.find((item) => item.value === state.selectedColor) || palette[1];
+        palette.forEach((item) => {
+          item.element.classList.toggle('active', item.value === current.value);
+        });
+        elements.selectedName.textContent = current.name;
+        elements.selectedTip.textContent = current.tip;
+        elements.selectedSwatch.className = 'selected-swatch';
+        if (current.checker) {
+          elements.selectedSwatch.classList.add('checker');
+          elements.selectedSwatch.style.background = '';
+        } else {
+          elements.selectedSwatch.style.background = current.value;
+        }
+      }
+
+      function clamp(value, minValue, maxValue) {
+        return Math.max(minValue, Math.min(maxValue, value));
+      }
+
+      function projectMercator(lng, lat) {
+        const limitedLat = clamp(lat, -85.05112878, 85.05112878);
+        return {
+          x: lng * Math.PI / 180,
+          y: Math.log(Math.tan(Math.PI / 4 + limitedLat * Math.PI / 360))
+        };
+      }
+
+      function unprojectMercator(x, y) {
+        return {
+          lng: x * 180 / Math.PI,
+          lat: (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180 / Math.PI
+        };
+      }
+
+      function lngLatToPair(lngLat) {
+        if (!lngLat) {
+          return null;
+        }
+        if (Array.isArray(lngLat) && lngLat.length >= 2) {
+          return [Number(lngLat[0]), Number(lngLat[1])];
+        }
+        if (typeof lngLat.getLng === 'function' && typeof lngLat.getLat === 'function') {
+          return [lngLat.getLng(), lngLat.getLat()];
+        }
+        if (typeof lngLat.lng === 'number' && typeof lngLat.lat === 'number') {
+          return [lngLat.lng, lngLat.lat];
+        }
+        return null;
+      }
+
+      function pixelKey(column, row) {
+        return column + ',' + row;
+      }
+
+      function normalizeGrid(grid) {
+        if (!grid || typeof grid !== 'object') {
+          return {};
+        }
+        const normalized = {};
+        Object.entries(grid).forEach(([key, value]) => {
+          if (!/^-?\d+,-?\d+$/.test(key)) {
+            return;
+          }
+          if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)) {
+            normalized[key] = value;
+          }
+        });
+        return normalized;
+      }
+
+      function persistState() {
+        try {
+          const payload = {
+            grid: state.pixels,
+            selectedColor: state.selectedColor,
+            energy: state.energy,
+            lastEnergyTick: state.lastEnergyTick
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+          state.saveLabel = '已自动保存';
+        } catch (error) {
+          state.saveLabel = '保存不可用';
+        }
+      }
+
+      function restoreState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            state.saveLabel = '暂无历史作品';
+            return;
+          }
+          const data = JSON.parse(raw);
+          state.pixels = normalizeGrid(data.grid);
+          state.pixelCount = Object.keys(state.pixels).length;
+          if (palette.some((item) => item.value === data.selectedColor)) {
+            state.selectedColor = data.selectedColor;
+          }
+          if (Number.isFinite(data.energy)) {
+            state.energy = clamp(Math.floor(data.energy), 0, MAX_ENERGY);
+          }
+          if (Number.isFinite(data.lastEnergyTick)) {
+            state.lastEnergyTick = data.lastEnergyTick;
+          }
+          state.saveLabel = '已恢复本地作品';
+        } catch (error) {
+          state.saveLabel = '恢复失败';
+        }
+      }
+
+      function recalculateEnergy() {
+        if (state.energy >= MAX_ENERGY) {
+          state.energy = MAX_ENERGY;
+          state.lastEnergyTick = Date.now();
+          return;
+        }
+        const now = Date.now();
+        const recovered = Math.floor((now - state.lastEnergyTick) / ENERGY_RECOVER_MS);
+        if (recovered > 0) {
+          state.energy = Math.min(MAX_ENERGY, state.energy + recovered);
+          state.lastEnergyTick += recovered * ENERGY_RECOVER_MS;
+          if (state.energy >= MAX_ENERGY) {
+            state.lastEnergyTick = now;
+          }
+        }
+      }
+
+      function getCooldownText() {
+        if (state.energy >= MAX_ENERGY) {
+          return '能量已满，可以继续放置像素';
+        }
+        const remaining = Math.max(0, ENERGY_RECOVER_MS - (Date.now() - state.lastEnergyTick));
+        return '下一点能量将在 ' + Math.max(1, Math.ceil(remaining / 1000)) + ' 秒后恢复';
+      }
+
+      function updateHud() {
+        recalculateEnergy();
+        const zoom = state.map ? state.map.getZoom() : null;
+        const center = state.map ? state.map.getCenter() : null;
+        document.body.classList.toggle('pixel-painting', Boolean(state.paintMode));
+        if (elements.layerText) {
+          elements.layerText.textContent = zoom && zoom >= DETAIL_ZOOM
+            ? '高德地图底座 · 精细像素层'
+            : '高德地图底座 · 任意缩放可涂画';
+        }
+        elements.centerText.textContent = center
+          ? center.getLng().toFixed(4) + ', ' + center.getLat().toFixed(4)
+          : '-';
+        elements.rangeText.textContent = '任意位置';
+        elements.zoomText.textContent = zoom ? zoom.toFixed(1) : '-';
+        elements.coordText.textContent = state.hoverCell ? state.hoverCell.column + ', ' + state.hoverCell.row : '-';
+        elements.pixelCountText.textContent = String(state.pixelCount);
+        elements.energyText.textContent = state.energy + ' / ' + MAX_ENERGY;
+        elements.energyFill.style.width = (state.energy / MAX_ENERGY) * 100 + '%';
+        elements.cooldownText.textContent = getCooldownText();
+        elements.mapStatusText.textContent = state.mapStatus;
+        elements.saveText.textContent = state.saveLabel;
+        if (elements.statusText) {
+          elements.statusText.textContent = state.message;
+        }
+        if (elements.statusTip) {
+          elements.statusTip.textContent = state.tip;
+        }
+        elements.paintButton.classList.toggle('active', state.paintMode);
+        elements.paintButton.textContent = state.paintMode ? 'Painting' : 'Paint';
+      }
+
+      function clearCanvas() {
+        context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      }
+
+      function getCellRangeFromBounds(bounds) {
+        const southWest = bounds.getSouthWest();
+        const northEast = bounds.getNorthEast();
+        const leftTop = projectMercator(southWest.getLng(), northEast.getLat());
+        const rightBottom = projectMercator(northEast.getLng(), southWest.getLat());
+        const minColumn = Math.floor((Math.min(leftTop.x, rightBottom.x) + Math.PI) / GRID_STEP) - 2;
+        const maxColumn = Math.ceil((Math.max(leftTop.x, rightBottom.x) + Math.PI) / GRID_STEP) + 2;
+        const minRow = Math.floor((Math.PI - Math.max(leftTop.y, rightBottom.y)) / GRID_STEP) - 2;
+        const maxRow = Math.ceil((Math.PI - Math.min(leftTop.y, rightBottom.y)) / GRID_STEP) + 2;
+        return { minColumn, maxColumn, minRow, maxRow };
+      }
+
+      function getCellCornerLngLat(column, row) {
+        return unprojectMercator(-Math.PI + column * GRID_STEP, Math.PI - row * GRID_STEP);
+      }
+
+      function getCellRectPixels(column, row) {
+        const topLeftLngLat = getCellCornerLngLat(column, row);
+        const bottomRightLngLat = getCellCornerLngLat(column + 1, row + 1);
+        const topLeftPixel = state.map.lngLatToContainer(new AMap.LngLat(topLeftLngLat.lng, topLeftLngLat.lat));
+        const bottomRightPixel = state.map.lngLatToContainer(new AMap.LngLat(bottomRightLngLat.lng, bottomRightLngLat.lat));
+        return {
+          x: topLeftPixel.x,
+          y: topLeftPixel.y,
+          width: Math.max(1, bottomRightPixel.x - topLeftPixel.x),
+          height: Math.max(1, bottomRightPixel.y - topLeftPixel.y)
+        };
+      }
+
+      function getMarkerSize(minimumSize) {
+        const zoom = state.map ? state.map.getZoom() : 0;
+        if (zoom >= DETAIL_ZOOM) {
+          return 1;
+        }
+        if (zoom >= 8) {
+          return Math.max(4, minimumSize - 2);
+        }
+        if (zoom >= 6) {
+          return minimumSize;
+        }
+        return minimumSize + 2;
+      }
+
+      function getVisibleCellRect(column, row, minimumSize) {
+        const rect = getCellRectPixels(column, row);
+        const visibleWidth = Math.max(rect.width, getMarkerSize(minimumSize));
+        const visibleHeight = Math.max(rect.height, getMarkerSize(minimumSize));
+        const centerX = rect.x + rect.width / 2;
+        const centerY = rect.y + rect.height / 2;
+        return {
+          x: centerX - visibleWidth / 2,
+          y: centerY - visibleHeight / 2,
+          width: visibleWidth,
+          height: visibleHeight
+        };
+      }
+
+      function getCellFromLngLat(lngLat) {
+        const point = lngLatToPair(lngLat);
+        if (!point) {
+          return null;
+        }
+        const mercator = projectMercator(point[0], point[1]);
+        return {
+          column: Math.floor((mercator.x + Math.PI) / GRID_STEP),
+          row: Math.floor((Math.PI - mercator.y) / GRID_STEP)
+        };
+      }
+
+      function containerEventToLngLat(event) {
+        if (!state.map || !window.AMap) {
+          return null;
+        }
+        const bounds = elements.map.getBoundingClientRect();
+        const x = event.clientX - bounds.left;
+        const y = event.clientY - bounds.top;
+        return state.map.containerToLngLat(new AMap.Pixel(x, y));
+      }
+
+      function redrawPaintLayer() {
+        clearCanvas();
+        if (!state.map) {
+          updateHud();
+          return;
+        }
+
+        const bounds = state.map.getBounds();
+        if (!bounds) {
+          updateHud();
+          return;
+        }
+
+        const range = getCellRangeFromBounds(bounds);
+        context.save();
+
+        Object.entries(state.pixels).forEach(([key, color]) => {
+          const [column, row] = key.split(',').map(Number);
+          if (column < range.minColumn || column > range.maxColumn || row < range.minRow || row > range.maxRow) {
+            return;
+          }
+          const rect = getVisibleCellRect(column, row, MIN_PIXEL_SIZE);
+          context.fillStyle = color;
+          context.fillRect(rect.x, rect.y, rect.width, rect.height);
+          if (state.map.getZoom() < DETAIL_ZOOM) {
+            context.lineWidth = 1;
+            context.strokeStyle = 'rgba(15, 24, 37, .45)';
+            context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+          }
+        });
+
+        if (state.map.getZoom() >= DETAIL_ZOOM) {
+          context.lineWidth = 1;
+          context.strokeStyle = state.paintMode ? 'rgba(27,45,70,.58)' : 'rgba(27,45,70,.32)';
+
+          for (let column = range.minColumn; column <= range.maxColumn; column += 1) {
+            const topLngLat = getCellCornerLngLat(column, range.minRow);
+            const bottomLngLat = getCellCornerLngLat(column, range.maxRow + 1);
+            const topPixel = state.map.lngLatToContainer(new AMap.LngLat(topLngLat.lng, topLngLat.lat));
+            const bottomPixel = state.map.lngLatToContainer(new AMap.LngLat(bottomLngLat.lng, bottomLngLat.lat));
+            context.beginPath();
+            context.moveTo(topPixel.x, topPixel.y);
+            context.lineTo(bottomPixel.x, bottomPixel.y);
+            context.stroke();
+          }
+
+          for (let row = range.minRow; row <= range.maxRow; row += 1) {
+            const leftLngLat = getCellCornerLngLat(range.minColumn, row);
+            const rightLngLat = getCellCornerLngLat(range.maxColumn + 1, row);
+            const leftPixel = state.map.lngLatToContainer(new AMap.LngLat(leftLngLat.lng, leftLngLat.lat));
+            const rightPixel = state.map.lngLatToContainer(new AMap.LngLat(rightLngLat.lng, rightLngLat.lat));
+            context.beginPath();
+            context.moveTo(leftPixel.x, leftPixel.y);
+            context.lineTo(rightPixel.x, rightPixel.y);
+            context.stroke();
+          }
+        }
+
+        if (state.hoverCell) {
+          const rect = getVisibleCellRect(state.hoverCell.column, state.hoverCell.row, MIN_HOVER_SIZE);
+          context.fillStyle = state.selectedColor === '__erase__'
+            ? 'rgba(255,255,255,.2)'
+            : hexToRgba(state.selectedColor, .34);
+          context.fillRect(rect.x, rect.y, rect.width, rect.height);
+          context.lineWidth = 2;
+          context.strokeStyle = state.paintMode ? 'rgba(255,255,255,.98)' : 'rgba(255,255,255,.68)';
+          context.strokeRect(rect.x + 1, rect.y + 1, Math.max(1, rect.width - 2), Math.max(1, rect.height - 2));
+        }
+
+        context.restore();
+        updateHud();
+      }
+
+      function hexToRgba(hex, alpha) {
+        if (!hex || hex === '__erase__') {
+          return 'rgba(255,255,255,' + alpha + ')';
+        }
+        const normalized = hex.replace('#', '');
+        const red = parseInt(normalized.slice(0, 2), 16);
+        const green = parseInt(normalized.slice(2, 4), 16);
+        const blue = parseInt(normalized.slice(4, 6), 16);
+        return 'rgba(' + red + ',' + green + ',' + blue + ',' + alpha + ')';
+      }
+
+      function updateHoverCell(lngLat) {
+        if (!state.map) {
+          return;
+        }
+        const cell = getCellFromLngLat(lngLat);
+        if (!cell) {
+          if (state.hoverCell) {
+            state.hoverCell = null;
+            scheduleRedraw();
+          }
+          return;
+        }
+        if (state.hoverCell && state.hoverCell.column === cell.column && state.hoverCell.row === cell.row) {
+          return;
+        }
+        state.hoverCell = cell;
+        scheduleRedraw();
+      }
+
+      function tryPaintAt(lngLat, options = {}) {
+        const cell = getCellFromLngLat(lngLat);
+        if (!cell) {
+          setStatus('当前位置无法识别', '请在地图范围内点击');
+          updateHud();
+          return;
+        }
+        const { column, row } = cell;
+        const key = pixelKey(column, row);
+
+        if (options.skipDuplicate && state.lastPaintedKey === key) {
+          return;
+        }
+
+        recalculateEnergy();
+        if (state.energy <= 0) {
+          setStatus('Charges 不足', getCooldownText());
+          updateHud();
+          return;
+        }
+
+        const wasFull = state.energy === MAX_ENERGY;
+        state.energy -= 1;
+        if (wasFull) {
+          state.lastEnergyTick = Date.now();
+        }
+
+        state.lastPaintedKey = key;
+        state.hoverCell = { column, row };
+        if (state.selectedColor === '__erase__') {
+          if (state.pixels[key]) {
+            delete state.pixels[key];
+            state.pixelCount -= 1;
+          }
+          setStatus('已恢复像素底色', '坐标：' + column + ', ' + row);
+        } else {
+          const isNewPixel = !state.pixels[key];
+          state.pixels[key] = state.selectedColor;
+          if (isNewPixel) {
+            state.pixelCount += 1;
+          }
+          setStatus('已放置像素', '坐标：' + column + ', ' + row);
+        }
+        persistState();
+        updateHud();
+        scheduleRedraw();
+      }
+
+      function handleCanvasPointer(event, shouldPaint) {
+        if (!state.map || !state.paintMode) {
+          return;
+        }
+        const lngLat = containerEventToLngLat(event);
+        if (!lngLat) {
+          return;
+        }
+        updateHoverCell(lngLat);
+        if (shouldPaint) {
+          tryPaintAt(lngLat, { skipDuplicate: true });
+        }
+      }
+
+      function handleMapViewChange() {
+        if (!state.map) {
+          return;
+        }
+        updateHud();
+        scheduleRedraw();
+      }
+
+      function exportArtwork() {
+        const payload = {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          grid: state.pixels
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'china-place-amap-artwork.json';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        setStatus('作品已导出', '文件名：china-place-amap-artwork.json');
+        updateHud();
+      }
+
+      function importArtwork(file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(String(reader.result || ''));
+            state.pixels = normalizeGrid(data.grid);
+            state.pixelCount = Object.keys(state.pixels).length;
+            persistState();
+            setStatus('作品导入成功', '当前像素：' + state.pixelCount);
+            updateHud();
+            scheduleRedraw();
+          } catch (error) {
+            setStatus('导入失败', '文件格式不正确');
+            updateHud();
+          }
+        };
+        reader.readAsText(file, 'utf-8');
+      }
+
+      function clearArtwork() {
+        const confirmed = window.confirm('确定要清空当前作品吗？这会覆盖本地自动保存。');
+        if (!confirmed) {
+          return;
+        }
+        state.pixels = {};
+        state.pixelCount = 0;
+        state.energy = MAX_ENERGY;
+        state.lastEnergyTick = Date.now();
+        persistState();
+        setStatus('作品已清空', '可以在地图任意位置重新开始涂画');
+        updateHud();
+        scheduleRedraw();
+      }
+
+      function bindMapEvents() {
+        state.map.on('zoomend', handleMapViewChange);
+        state.map.on('moveend', handleMapViewChange);
+        state.map.on('resize', () => {
+          updateCanvasSize();
+          scheduleRedraw();
+        });
+        state.map.on('mousemove', (event) => {
+          if (!state.paintMode) {
+            if (state.hoverCell) {
+              state.hoverCell = null;
+              scheduleRedraw();
+            }
+            return;
+          }
+          updateHoverCell(event.lnglat);
+        });
+        elements.map.addEventListener('click', (event) => {
+          if (!state.paintMode) {
+            return;
+          }
+          const lngLat = containerEventToLngLat(event);
+          if (lngLat) {
+            tryPaintAt(lngLat);
+          }
+        });
+        elements.paintCanvas.addEventListener('pointerdown', (event) => {
+          if (!state.paintMode) {
+            return;
+          }
+          state.pointerDrawing = true;
+          state.lastPaintedKey = '';
+          if (typeof elements.paintCanvas.setPointerCapture === 'function') {
+            elements.paintCanvas.setPointerCapture(event.pointerId);
+          }
+          event.preventDefault();
+          handleCanvasPointer(event, true);
+        });
+        elements.paintCanvas.addEventListener('pointermove', (event) => {
+          if (!state.paintMode) {
+            return;
+          }
+          event.preventDefault();
+          handleCanvasPointer(event, state.pointerDrawing);
+        });
+        elements.paintCanvas.addEventListener('pointerup', (event) => {
+          state.pointerDrawing = false;
+          state.lastPaintedKey = '';
+          if (typeof elements.paintCanvas.releasePointerCapture === 'function') {
+            elements.paintCanvas.releasePointerCapture(event.pointerId);
+          }
+        });
+        elements.paintCanvas.addEventListener('pointercancel', () => {
+          state.pointerDrawing = false;
+          state.lastPaintedKey = '';
+        });
+        elements.paintCanvas.addEventListener('mouseleave', () => {
+          if (!state.hoverCell) {
+            return;
+          }
+          state.hoverCell = null;
+          state.pointerDrawing = false;
+          state.lastPaintedKey = '';
+          scheduleRedraw();
+        });
+        elements.map.addEventListener('mouseleave', () => {
+          if (!state.hoverCell) {
+            return;
+          }
+          state.hoverCell = null;
+          scheduleRedraw();
+        });
+      }
+
+      function initMap() {
+        state.map = new AMap.Map('map', {
+          viewMode: '2D',
+          zoom: 4.7,
+          center: [104.2, 35.7],
+          mapStyle: 'amap://styles/normal',
+          features: ['bg', 'road', 'building', 'point'],
+          zooms: [3, 20],
+          pitchEnable: false,
+          rotateEnable: false,
+          dragEnable: true,
+          zoomEnable: true,
+          doubleClickZoom: true
+        });
+
+        state.map.addControl(new AMap.Scale());
+        state.map.addControl(new AMap.ToolBar({ position: 'RB' }));
+        bindMapEvents();
+        state.mapStatus = '地图已连接';
+        setStatus('地图已连接', '点击右侧 Paint 后即可涂画；放大后会进入更精细的像素层', '浏览模式');
+        updateHud();
+        scheduleRedraw();
+      }
+
+      function applyAmapSecurityConfig(securityJsCode) {
+        const trimmedSecurityJsCode = String(securityJsCode || '').trim();
+        if (!trimmedSecurityJsCode) {
+          delete window._AMapSecurityConfig;
+          return;
+        }
+        window._AMapSecurityConfig = {
+          securityJsCode: trimmedSecurityJsCode
+        };
+      }
+
+      function loadAmapScript(key, securityJsCode) {
+        if (window.AMap && state.scriptLoaded) {
+          return Promise.resolve();
+        }
+        if (state.scriptLoadingPromise) {
+          return state.scriptLoadingPromise;
+        }
+
+        applyAmapSecurityConfig(securityJsCode);
+        state.scriptLoadingPromise = new Promise((resolve, reject) => {
+          const callbackName = '__chinaPlaceAmapLoaded';
+          const existingScript = document.getElementById('amapJsApiScript');
+          if (existingScript) {
+            existingScript.remove();
+          }
+
+          let settled = false;
+          const finish = (handler) => {
+            state.scriptLoadingPromise = null;
+            handler();
+          };
+
+          const timer = window.setTimeout(() => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            finish(() => reject(new Error('高德脚本加载超时')));
+          }, MAP_SCRIPT_TIMEOUT_MS);
+
+          window[callbackName] = () => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            window.clearTimeout(timer);
+            state.scriptLoaded = true;
+            finish(resolve);
+          };
+
+          const script = document.createElement('script');
+          script.id = 'amapJsApiScript';
+          script.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(key) + '&plugin=AMap.Scale,AMap.ToolBar&callback=' + callbackName;
+          script.async = true;
+          script.onerror = () => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            window.clearTimeout(timer);
+            finish(() => reject(new Error('高德脚本加载失败')));
+          };
+          document.head.appendChild(script);
+        });
+
+        return state.scriptLoadingPromise;
+      }
+
+      async function startAmapWithKey(key, securityJsCode) {
+        const trimmedKey = String(key || '').trim();
+        const trimmedSecurityJsCode = String(securityJsCode || '').trim();
+        if (!trimmedKey) {
+          elements.keyErrorText.textContent = '请先输入高德 Web Key';
+          return;
+        }
+
+        elements.keyErrorText.textContent = '';
+        state.amapKey = trimmedKey;
+        state.amapSecurityJsCode = trimmedSecurityJsCode;
+        state.mapStatus = '连接中';
+        setStatus('正在连接高德地图', '如果加载失败，请检查 Key、域名白名单、安全密钥和网络', '连接中');
+        updateHud();
+
+        try {
+          await loadAmapScript(trimmedKey, trimmedSecurityJsCode);
+          elements.keyMask.classList.add('hidden');
+          elements.keyErrorText.textContent = '';
+          setStatus('高德脚本已加载', '正在初始化地图', '初始化');
+          if (!state.map) {
+            initMap();
+          }
+        } catch (error) {
+          state.mapStatus = '连接失败';
+          elements.keyErrorText.textContent = error.message + '，请确认 Key / SecurityJsCode 可用于当前页面';
+          setStatus('高德地图加载失败', '请检查 Key、SecurityJsCode，以及域名白名单是否允许当前页面', '连接失败');
+          elements.keyMask.classList.remove('hidden');
+          updateHud();
+        }
+      }
+
+      function bindUiEvents() {
+        window.addEventListener('resize', () => {
+          updateCanvasSize();
+          scheduleRedraw();
+        });
+
+        elements.recenterButton.addEventListener('click', () => {
+          if (!state.map) {
+            setStatus('地图尚未连接', '请稍等地图加载完成后再操作', '加载中');
+            updateHud();
+            return;
+          }
+          state.map.setZoomAndCenter(4.7, [104.2, 35.7]);
+          state.paintMode = false;
+          state.hoverCell = null;
+          state.pointerDrawing = false;
+          state.lastPaintedKey = '';
+          setStatus('已回到全国视图', '点击右侧 Paint 后即可继续涂画', '浏览模式');
+          updateHud();
+          scheduleRedraw();
+        });
+
+        elements.paintButton.addEventListener('click', () => {
+          if (!state.map) {
+            setStatus('地图尚未连接', '请稍等地图加载完成后再操作', '加载中');
+            updateHud();
+            return;
+          }
+          state.paintMode = !state.paintMode;
+          if (state.paintMode) {
+            state.selectedColor = palette[2].value;
+            updatePalette();
+            persistState();
+          }
+          if (!state.paintMode) {
+            state.pointerDrawing = false;
+            state.lastPaintedKey = '';
+            state.hoverCell = null;
+          }
+          setStatus(
+            state.paintMode ? 'Paint 已开启' : 'Paint 已关闭',
+            state.paintMode ? '已自动选中红色；现在可以单击或拖动画格子' : '当前为浏览模式，点击右侧 Paint 后再涂画',
+            state.paintMode ? 'Paint 开启' : '浏览模式'
+          );
+          updateHud();
+          scheduleRedraw();
+        });
+
+        elements.exportButton.addEventListener('click', exportArtwork);
+        elements.importButton.addEventListener('click', () => elements.importInput.click());
+        elements.resetButton.addEventListener('click', clearArtwork);
+
+        elements.importInput.addEventListener('change', (event) => {
+          const file = event.target.files && event.target.files[0];
+          if (file) {
+            importArtwork(file);
+          }
+          elements.importInput.value = '';
+        });
+
+        elements.loadMapButton.addEventListener('click', () => {
+          startAmapWithKey(elements.amapKeyInput.value, elements.amapSecurityInput.value);
+        });
+
+        elements.closeMaskButton.addEventListener('click', () => {
+          elements.keyMask.classList.add('hidden');
+        });
+      }
+
+      function init() {
+        updateCanvasSize();
+        initPalette();
+        restoreState();
+        updatePalette();
+        bindUiEvents();
+        updateHud();
+        if (elements.statusChip) {
+          elements.statusChip.textContent = '等待 Key';
+        }
+
+        elements.amapKeyInput.value = '';
+        elements.amapSecurityInput.value = '';
+        elements.keyMask.classList.remove('hidden');
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
