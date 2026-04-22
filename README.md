@@ -22,3 +22,4 @@
 5. 如需切换颜色，可在左侧调色板中选择
 6. 可通过右侧工具按钮进行导出、导入或清空作品
 7. 如页面内容没有更新，请强制刷新浏览器后再试
+<img width="2548" height="1293" alt="paintMap" src="https://github.com/user-attachments/assets/20999596-e571-48d5-aa1b-0d7a60b6347d" />
